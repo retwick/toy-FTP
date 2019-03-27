@@ -36,8 +36,6 @@ while True:
     conn, addr = s.accept()
     with conn:
         print('Connected by', addr)
-        path = root
-        os.chdir(root)
         while True:
             data_b = conn.recv(1024)
             data = data_b.decode()
@@ -80,24 +78,34 @@ while True:
                         os.chdir(current_path)
                         continue
                     local_path = remove_prefix(os.getcwd(),root)                
+                    # if len(local_path) == 0:
+                    #     local_path = "/"
                 conn.send(str.encode(local_path))
 
             elif tokens[0] == "RETR":
                 curr_path = os.getcwd()
+                
                 #dirname is not provided
                 if os.path.isfile(curr_path+"/"+tokens[1]):
                     conn.send(b'1')     #file exist                
+                    # read_from_file(tokens[1],s)
+                    
                     f = open(tokens[1],'rb')
                     l = f.read(1024)
                     while (l):
+                        # print("")
+                        
+                        # print(l)
                         if not l:
                             break
                         l = l.replace(b'\\', b'\\\\')
-                        l = l.replace(b'$', b'\$')
+                        l = l.replace(b"$", b"\$")
+                        # l = str.encode(l)
                         conn.send(l)
                         l = f.read(1024)
 
                     f.close()
+                    # print('send EOF')
                     conn.send(b'$')
                                                     
                 else:
@@ -113,18 +121,23 @@ while True:
                     marker = " "
                     while True:
                         flag = False
-                        if len(marker) == 1 and marker[-1:] == ord('$') or len(marker) > 1 and not marker[-2] == ord('\\') and marker[-1]== ord("$"):                
+                        # print(marker)
+                        if len(marker) == 1 and marker[-1:] == b'$' or len(marker) > 1 and not marker[-2] == b'\\' and marker[-1]==b"$":
+                            flag = True
                             break
                         # print('rec')
                         data = conn.recv(1024)
+                        # print(data)
                         marker = data[-2:]
-                        # print(marker, len(marker), marker[-1], marker[-1] == "$", marker[-1] == b"$", marker[-1] == ord("$") )
-                        if len(marker) == 1 and marker[-1:] == ord('$') or len(marker) > 1 and not marker[-2] == ord('\\') and marker[-1]== ord("$"):                
+                        if flag:
                             data = data[:-1]
-                        
+                        if not data: 
+                            break
                         # write data to a file
+                        # data = data.decode()
                         data = data.replace(b'\\\\', b'\\')
                         data = data.replace(b"\$", b"$")
+                        # data = str.encode(data)
                         f.write(data)
                 f.close()
 

@@ -4,26 +4,29 @@ import sys
 import os
 
 def remove_prefix(s, prefix):
-    return s[len(prefix):] if s.startswith(prefix) else s
-#print(os.path.exists("/home/el/myfile.txt"))
+    return s[len(prefix):] if len(s)-len(prefix)>0 else "/"
 
 def recieve_to_file(filename, s):
     with open(filename, 'wb') as f:
-        print('file opened')
         marker = " "
-        while True:
-            print('receiving data...', marker)
-            if len(marker) > 1 and not marker[-2] == '\\':
+        while True:            
+            # try:
+            #     print(marker, "-----", marker[-1], marker[-2])
+            # except:
+            #     print(marker, "-----", marker[-1])
+
+            if len(marker) == 1 and marker[-1:] == ord('$') or len(marker) > 1 and not marker[-2] == ord('\\') and marker[-1]== ord("$"):                
                 break
-            if len(marker) == 1 and marker[-1:] == "$":
-                break
+            # print('reciev')
             data = s.recv(1024)
+            # print(data)
             marker = data[-2:]
-            # write data to a file
-            data = data.decode()
-            data = data.replace('\\\\', '\\')
-            data = data.replace(r"\$", "$")
-            data = str.encode(data)
+            if len(marker) == 1 and marker[-1:] == ord("$") or len(marker) > 1 and not marker[-2] == ord('\\') and marker[-1]== ord("$"):
+                data = data[:-1]
+            if not data: 
+                break
+            data = data.replace(b'\\\\', b'\\')
+            data = data.replace(b"\$", b"$")
             f.write(data)
     f.close()
     print('Successfully get the file')
@@ -31,13 +34,10 @@ def recieve_to_file(filename, s):
 def send_from_file(filename,s):
     f = open(filename,'rb')
     l = f.read(1024)
-    while (l):
-        l = l.decode()
-        l = l.replace('\\', '\\\\')
-        l = l.replace("$", r"\$")
-        l = str.encode(l)
+    while (l):        
+        l = l.replace(b'\\', b'\\\\')
+        l = l.replace(b"$", b"\$")        
         s.send(l)
-        print('Sent ',repr(l))
         l = f.read(1024)
     f.close()
     
@@ -47,8 +47,8 @@ def send_from_file(filename,s):
 
 root = os.getcwd()
 
-HOST = 'localhost'  # The remote host
-PORT = sys.argv[1]        # The same port as used by the server
+HOST = sys.argv[1]        # The remote host
+PORT = sys.argv[2]        # The same port as used by the server
 s = None
 for res in socket.getaddrinfo(HOST, PORT, socket.AF_UNSPEC, socket.SOCK_STREAM):
     af, socktype, proto, canonname, sa = res
@@ -68,12 +68,10 @@ if s is None:
     print('could not open socket')
     sys.exit(1)
 with s:
-    # print("hello world")
     while True:
         command = input('$ ')
         tokens = command.split()
         if tokens[0] == "ls":
-            # print("ls")
             # send to server: NLST <>
             server_command = "NLST" + command[2:]
             s.sendall(str.encode(server_command))
@@ -81,7 +79,6 @@ with s:
             print(result.decode())
             
         elif tokens[0] == "cd":
-            
             # send to server: CWD <>
             server_command = "CWD"+command[2:]
             s.sendall(str.encode(server_command))
@@ -96,15 +93,12 @@ with s:
                 #check if valid directory
                 if os.path.isdir(root+"/"+tokens[1]):
                     os.chdir(root+"/"+tokens[1])
-                    #!!!!!!!!!
                     full_path = os.getcwd()
                     local_path = remove_prefix(full_path,root)
                     print(local_path)
                 else:
-                    # print(root+tokens[1])
                     print(tokens[1], "does not exist.")
         elif tokens[0] == "get":
-            print("get comamnd")
             
             if len(tokens) > 3:
                 print("Invalid Command")
@@ -125,7 +119,6 @@ with s:
                 s.sendall(str.encode(server_command))
                 # s.sendall(str.encode(command))
                 result = s.recv(1024)
-                # print("resp ",result.decode())
                 if result.decode() == "1":
                     #FILE NAME OK
                     recieve_to_file(tokens[1],s)
@@ -135,12 +128,7 @@ with s:
         elif tokens[0] == "put":
             curr_path = os.getcwd()
                                        
-            if os.path.exists(curr_path+"/"+tokens[1]):
-                print("file exists.")
-                #file exists at client
-                             
-            else:                    
-                #file DNE
+            if not os.path.isfile(curr_path+"/"+tokens[1]):
                 print(tokens[1], "does not exist")
                 continue 
 
@@ -177,15 +165,14 @@ with s:
             server_command = "PWD"
             s.sendall(str.encode(server_command))
             response = s.recv(1024)
-            print(response.decode())
+            print("Directory at server:", response.decode())
+            # print(response.decode())
 
         elif tokens[0] == "quit":
             print("quiting")
-            # s.close()
+            command = "QUIT"
+            s.sendall(str.encode(command))
+            s.close()
             sys.exit(1)
-        
-        
-    data = s.recv(1024)
-    
-
-print('Received', repr(data))
+                
+    data = s.recv(1024)    
